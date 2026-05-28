@@ -4,7 +4,7 @@ app = Flask(__name__)
 
 EXCHANGE_RATES = {
     "USD": 1.0,
-    "LKR": 300.0,
+    "LKR": 328.37,
     "INR": 83.0,
     "GBP": 0.79,
     "EUR": 0.92,
