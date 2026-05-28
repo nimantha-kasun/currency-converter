@@ -1,18 +1,13 @@
 from flask import Flask, render_template_string, request, jsonify
+import requests
 
 app = Flask(__name__)
 
+# Live rates ගන්න බැරි වුනොත් fallback එකක් විදිහට පාවිච්චි කරන්න default rates
 EXCHANGE_RATES = {
-    "USD": 1.0,
-    "LKR": 328.37,
-    "INR": 83.0,
-    "GBP": 0.79,
-    "EUR": 0.92,
-    "AUD": 1.52,
-    "CAD": 1.35,
-    "JPY": 150.0,
-    "SGD": 1.34,
-    "AED": 3.67
+    "USD": 1.0, "LKR": 300.0, "INR": 83.0, "GBP": 0.79,
+    "EUR": 0.92, "AUD": 1.52, "CAD": 1.35, "JPY": 150.0,
+    "SGD": 1.34, "AED": 3.67
 }
 
 FLAGS = {
@@ -20,6 +15,29 @@ FLAGS = {
     "EUR": "🇪🇺", "AUD": "🇦🇺", "CAD": "🇨🇦", "JPY": "🇯🇵",
     "SGD": "🇸🇬", "AED": "🇦🇪"
 }
+
+def get_live_rates():
+    """ API එකෙන් live exchange rates fetch කරන function එක """
+    try:
+        # USD base කරගත් නොමිලේ ලැබෙන live API එකක්
+        url = "https://open.er-api.com/v6/latest/USD"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        
+        if data.get("result") == "success":
+            live_rates = data.get("rates", {})
+            # අපිට අවශ්‍ය currency ටික විතරක් live rates වලින් filter කරලා ගන්නවා
+            updated_rates = {}
+            for code in EXCHANGE_RATES.keys():
+                if code in live_rates:
+                    updated_rates[code] = live_rates[code]
+                else:
+                    updated_rates[code] = EXCHANGE_RATES[code] # live නැත්නම් default එක දානවා
+            return updated_rates
+    except Exception as e:
+        print(f"Error fetching live rates: {e}. Using fallback rates.")
+    
+    return EXCHANGE_RATES
 
 UI_TEMPLATE = """
 <!DOCTYPE html>
@@ -416,7 +434,9 @@ UI_TEMPLATE = """
 
 @app.route('/')
 def index():
-    currencies = [(code, f"{FLAGS.get(code, '')} {code}") for code in EXCHANGE_RATES]
+    # Page එක load වෙනකොටම live rates fetch කරලා dropdown එක හදනවා
+    live_rates = get_live_rates()
+    currencies = [(code, f"{FLAGS.get(code, '')} {code}") for code in live_rates]
     return render_template_string(UI_TEMPLATE, currencies=currencies, flags=FLAGS)
 
 
@@ -427,9 +447,12 @@ def convert_api():
     from_curr = data['from']
     to_curr   = data['to']
 
-    amount_in_usd    = amount / EXCHANGE_RATES[from_curr]
-    converted_amount = amount_in_usd * EXCHANGE_RATES[to_curr]
-    rate             = EXCHANGE_RATES[to_curr] / EXCHANGE_RATES[from_curr]
+    # හැම conversion request එකකදීම අලුත්ම live rates ගන්නවා
+    live_rates = get_live_rates()
+
+    amount_in_usd    = amount / live_rates[from_curr]
+    converted_amount = amount_in_usd * live_rates[to_curr]
+    rate             = live_rates[to_curr] / live_rates[from_curr]
 
     return jsonify({"result": converted_amount, "rate": rate})
 
